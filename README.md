@@ -8,7 +8,7 @@ This is a take-home assessment (Full Stack Developer Intern — CognoDB, Wexa AI
 
 ## Current development status
 
-Phase 1 (foundation), Phase 2 (graph model, seed data, seed script, query layer), Phase 3 (API layer), and Phase 4 (career-explorer frontend) are complete, merged, and verified end-to-end against a temporary, disposable Neo4j 5.26 instance. See the Assignment Notes / Verification section near the end of this README for the exact, current, honest status of hosted CognoDB validation and deployment — do not rely on this paragraph alone for that.
+Phase 1 (foundation), Phase 2 (graph model, seed data, seed script, query layer), Phase 3 (API layer), and Phase 4 (career-explorer frontend) are complete and merged. Phase 5 completed **live validation against the hosted CognoDB instance** from a local development machine: health check, seed (run twice, idempotent), every API route, and a real-browser click-through of every page all pass against the real instance. Deployment is still outstanding. See the Assignment Notes / Verification section near the end of this README for the exact, current status.
 
 New contributors and AI coding agents should read [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) first. It documents the assessment requirements, the graph model, the phase plan, the secrets policy, and the rules for continuing this project.
 
@@ -114,7 +114,17 @@ Approximate current counts (exact, as of this dataset):
 - Nodes: 18 Developer, 35 Skill, 18 Project, 12 Role, 9 Company
 - Relationships: 76 `HAS_SKILL`, 19 `BUILT`, 54 `USES`, 48 `REQUIRES`, 23 `OFFERS`, 26 `RELATED_TO`
 
-**Verification status:** `npm run seed` and the full query layer were integration-tested against a temporary, disposable Neo4j 5.26 instance (not the hosted CognoDB instance), confirming the script and queries are correct — running the seed twice produced identical counts, with no duplicates. Live CognoDB connectivity was previously confirmed separately during Phase 1 (`GET /api/health` returned `{"status":"ok","database":"reachable"}` against the real instance). Phase 2 live seed verification against the hosted CognoDB instance itself is still pending, because the current remote sandbox cannot open outbound Bolt (raw TCP) connections — CognoDB's documented application connection is Bolt via the official Neo4j driver, and this is a sandbox network limitation, not a code or credentials issue. Whoever has direct network access to the CognoDB instance should run `npm run seed` and confirm the same counts.
+**Verification status:** `npm run seed` has been run against the **hosted CognoDB instance** from a local development machine. It was run twice back-to-back; the second run produced identical counts with no duplicates, confirming `MERGE`-based idempotency. Counts read back from the live instance after both runs:
+
+| Nodes | Count | | Relationships | Count |
+| --- | --- | --- | --- | --- |
+| `Developer` | 18 | | `HAS_SKILL` | 76 |
+| `Skill` | 35 | | `BUILT` | 19 |
+| `Project` | 18 | | `USES` | 54 |
+| `Role` | 12 | | `REQUIRES` | 48 |
+| `Company` | 9 | | `OFFERS` | 23 |
+| **Total** | **92** | | `RELATED_TO` | 26 |
+| | | | **Total** | **246** |
 
 ## Important Cypher Queries
 
@@ -195,7 +205,37 @@ shortestPath((start)-[:RELATED_TO*0..4]-(target))
 CREATE CONSTRAINT developer_id_unique IF NOT EXISTS FOR (n:Developer) REQUIRE n.id IS UNIQUE
 ```
 
-(one such constraint per node label). This syntax was validated by running it, along with the full seed script and query layer, against a temporary Neo4j 5.26 instance. It has **not** been executed against the hosted CognoDB instance from this sandbox, because this environment cannot open outbound Bolt connections to any host, hosted CognoDB included. No claim is made that this constraint syntax has been verified against CognoDB itself — that verification is still pending and should be done by whoever has direct network access to the instance.
+(one such constraint per node label). This syntax has been **executed successfully against the hosted CognoDB instance** — `npm run seed` runs `ensureSchema` first and completed without error on both runs, so CognoDB accepts this constraint syntax.
+
+### Pattern-existence predicates are not supported
+
+Live validation against the hosted instance surfaced one real behavioural difference from Neo4j, which the query layer is written around.
+
+CognoDB evaluates a **pattern-existence predicate in a `WHERE` clause as `false`** instead of matching it. It does not raise an error — it silently returns no rows. Every one of these forms returned `0` rows against the hosted instance, where Neo4j returns the 4 matching skills:
+
+```cypher
+WHERE (:Developer {id: $developerId})-[:HAS_SKILL]->(s)   -- anonymous node, inline property
+WHERE (d)-[:HAS_SKILL]->(s)                               -- bound variable
+WHERE (:Developer)-[:HAS_SKILL]->(s)                      -- label only
+WHERE exists { MATCH (:Developer {id: $id})-[:HAS_SKILL]->(s) }
+WHERE EXISTS((:Developer {id: $id})-[:HAS_SKILL]->(s))
+```
+
+Because the positive form is always `false`, the negated form (`WHERE NOT (...)`) is always `true`. `getSkillGapForRole` originally used `WHERE NOT (:Developer {id: $developerId})-[:HAS_SKILL]->(s)`, which on CognoDB reported *every* required skill as missing and drove the role detail view to `0%`.
+
+The fix is to express the anti-join with `OPTIONAL MATCH` + `IS NULL`, which CognoDB handles correctly:
+
+```cypher
+MATCH (r:Role {id: $roleId})-[req:REQUIRES]->(s:Skill)
+OPTIONAL MATCH (d:Developer {id: $developerId})-[:HAS_SKILL]->(s)
+WITH s, req, d
+WHERE d IS NULL
+RETURN s.id AS id, s.name AS name, s.category AS category,
+       req.minimumLevel AS minimumLevel, req.importance AS importance
+ORDER BY req.importance, s.name
+```
+
+This is the same idiom `getMatchingRolesForDeveloper` already used (`OPTIONAL MATCH` + `IS NOT NULL`), which is why the role *list* was always correct while the role *detail* was not. Plain `MATCH` traversal, `OPTIONAL MATCH`, `shortestPath`, variable-length patterns, `UNWIND`/`MERGE`, and aggregation all behave as expected on CognoDB. **When writing new queries for this project, use `OPTIONAL MATCH` + `IS NULL`/`IS NOT NULL` rather than pattern-existence predicates.**
 
 ## API Layer
 
@@ -298,11 +338,11 @@ Every data-driven section has all three states, not just a happy path:
 
 ## Screenshots
 
-Not included yet. Screenshots taken during development ran against a temporary, disposable local Neo4j instance, not the hosted CognoDB instance — they are intentionally left out here rather than included in a way that could be mistaken for the final hosted demo. This section will be filled in with real screenshots captured from the deployed hosted demo once deployment (see Live Demo below) is complete.
+Not included yet. The app has been validated in a real browser against the hosted CognoDB instance (see Assignment Notes / Verification below), but no final submission screenshots have been captured and committed yet. This section will be filled in with real screenshots rather than development-time captures.
 
 ## Live Demo
 
-Not deployed yet. This section will contain the real, working, publicly reachable demo URL once deployment is complete — see the Assignment Notes / Verification section for exactly what is blocking that right now.
+Not deployed yet. The application has been validated locally against the hosted CognoDB instance, but no public deployment exists. This section will contain the real, working, publicly reachable demo URL once deployment is complete.
 
 ## Local Setup
 
@@ -405,10 +445,18 @@ npm run build      # pass
 npm audit          # 0 vulnerabilities
 ```
 
-**Local integration verification (done):** the seed script, every Cypher query, and the full UI have been exercised against a temporary, disposable Neo4j 5.26 instance across Phases 2–5 — including running `npm run seed` twice back-to-back with identical node/relationship counts both times (confirming `MERGE`-based idempotency), every API route's success/empty/404/503 responses, and a real-browser (desktop + mobile) click-through of every page.
+**Hosted CognoDB validation (done):** completed from a local development machine with network access to the instance, using the real `COGNODB_URI`/`COGNODB_USERNAME`/`COGNODB_PASSWORD` from a git-ignored `.env.local`. Everything below ran against the actual hosted CognoDB instance, not a stand-in:
 
-**Hosted CognoDB validation:** attempted directly against the real `COGNODB_URI`/`COGNODB_USERNAME`/`COGNODB_PASSWORD` from this environment in Phase 5. `GET /api/health` returned `503` — the connection did not succeed. This is not a code, credentials, or CognoDB-configuration issue: this development sandbox's outbound network policy does not permit raw-TCP (Bolt) connections to any host, which is a documented, explicit limitation of this environment, not something to work around. **Hosted CognoDB validation therefore has not been completed from this environment** and must be run from a network that can actually reach the instance over Bolt — see Local Setup above; the same `npm run seed` and manual click-through described there is exactly what still needs to happen against the real instance.
+- **Health check:** `GET /api/health` returned `{"status":"ok","database":"reachable"}` (HTTP 200).
+- **Seed:** `npm run seed` completed successfully. `ensureSchema`'s `CREATE CONSTRAINT ... IF NOT EXISTS` syntax was accepted by CognoDB without error.
+- **Idempotency:** `npm run seed` was run a second time and completed successfully. Node and relationship counts read back from the live instance were identical after both runs — 92 nodes and 246 relationships, matching the table in the Seed Data section above, with no duplicates.
+- **API:** all seven routes returned correct live data for `dev-patrick-adegbesan`. `projectDerivedOnlySkills` returned Neo4j, Node.js, and Tailwind CSS. The top-ranked role was Full Stack Developer at 80% (4 of 5 required skills), with Node.js as the single missing skill. The career-path route returned a 1-hop JavaScript → TypeScript path. Error handling was confirmed live: unknown developer and unknown role both returned `404`, malformed ids returned `400`, and roles with no reachable path returned `{"found":false,"path":null}` with HTTP 200. The `503` path was deliberately **not** exercised, since that would have meant disrupting the hosted instance.
+- **UI:** `/`, `/skills`, `/roles`, `/roles/role-full-stack-developer`, and `/career-path` were all loaded in a real browser (Chromium via Playwright) against the hosted instance, at desktop (1280px) and mobile (390px) viewports. No blank screens, no uncaught client errors, no `5xx` responses, and no horizontal overflow at 390px. Full Stack Developer rendered 80% with Node.js shown as the missing skill; the Skills page rendered Neo4j, Node.js, and Tailwind CSS under "Seen in your projects"; the career-path visualization rendered the JavaScript → TypeScript → Full Stack Developer path; and the no-path case (Cloud Architect) rendered its dedicated empty state rather than an error.
 
-**Deployment:** not completed. This environment has no hosting-platform account or API token available to it (no Vercel/Netlify/etc. connector or credentials), so a real deployment cannot be created from here without that access being provided. The Live Demo and Screenshots sections above are placeholders for exactly this reason, not oversights.
+**One compatibility issue was found and fixed:** CognoDB evaluates pattern-existence predicates in a `WHERE` clause as `false` rather than matching them, which made `getSkillGapForRole` report every required skill as missing and the role detail view show `0%`. The query was rewritten as an `OPTIONAL MATCH` + `IS NULL` anti-join, after confirming against the live instance which constructs CognoDB actually supports. Full details are in the CognoDB Compatibility Note above. This was the only place in the codebase using that construct, and no architectural change was needed.
 
-**What this means for submission:** the graph model, seed data, query layer, API layer, and frontend are complete, internally consistent, and verified end-to-end against a real (if temporary) graph database. What remains before this is submission-ready is (1) running the seed and a smoke test against the actual hosted CognoDB instance from a network that can reach it, and (2) deploying the app somewhere with both a working `PORT`/Node runtime and outbound Bolt access, then capturing screenshots and a screen recording from that real deployment.
+**Local integration verification (done earlier):** the seed script, every Cypher query, and the full UI were also exercised against a temporary, disposable Neo4j 5.26 instance across Phases 2–4, covering every API route's success/empty/404/503 responses (including the `503` database-down path, which is not safe to test against the hosted instance) and a real-browser desktop + mobile click-through of every page.
+
+**Deployment:** not completed. No public deployment of this application exists yet. The Live Demo and Screenshots sections above are placeholders for that reason, not oversights.
+
+**What this means for submission:** the graph model, seed data, query layer, API layer, and frontend are complete and verified end-to-end against the actual hosted CognoDB instance. What remains before this is submission-ready is (1) deploying the app somewhere with a Node runtime and outbound Bolt access, and verifying the deployed demo, (2) capturing real screenshots for the Screenshots section, and (3) recording the screen recording using `docs/screen-recording-script.md`.
