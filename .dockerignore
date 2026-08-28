@@ -1,0 +1,18 @@
+# Never let local secrets into the image. Credentials are supplied at
+# runtime by Cloud Run from Secret Manager, never baked into a layer.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+node_modules
+.next
+npm-debug.log*
+
+docs
+*.md
+.node-version
+render.yaml
+tsconfig.tsbuildinfo
+.git-corrupt-backup-*

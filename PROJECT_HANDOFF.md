@@ -509,14 +509,54 @@ npm run build      # pass
 npm audit          # 0 vulnerabilities
 ```
 
+### Hosted deployment (COMPLETED)
+
+The application is deployed publicly on **Google Cloud Run**:
+
+```text
+https://skillgraph-217700153550.us-central1.run.app
+```
+
+- Built from the repository `Dockerfile` via Cloud Build (Next.js
+  `output: "standalone"`, Node 20, non-root user). Not a static export —
+  every `/api` route runs server-side and opens a Bolt connection.
+- Deployed into a dedicated GCP project created for this assessment, kept
+  separate from any other workload.
+- The three CognoDB values live in **Google Secret Manager** and are mounted
+  as runtime environment variables. They are absent from the image, the
+  repository, and any `NEXT_PUBLIC_` variable. `.dockerignore` and
+  `.gcloudignore` both exclude every `.env*` file, so `.env.local` is never
+  uploaded to Cloud Build nor copied into a layer.
+- Public (`--allow-unauthenticated`) so a reviewer can open the link. The app
+  is read-only over HTTP; seeding is a local script, not an HTTP route.
+- Scales to zero when idle, so the first request after a quiet period takes a
+  few seconds to warm.
+
+Verified against the deployed service (not just locally):
+
+- `GET /api/health` -> `{"status":"ok","database":"reachable"}` (HTTP 200)
+- `projectDerivedOnlySkills` -> Neo4j, Node.js, Tailwind CSS
+- top role -> Full Stack Developer, 80%, 4 of 5, missing Node.js
+- career path -> JavaScript -> TypeScript, 1 hop
+- unknown developer / unknown role -> 404; malformed id -> 400; no path ->
+  `{"found":false,"path":null}` with HTTP 200
+- all five pages loaded in a real browser at 1440px and 390px: no blank
+  screens, no uncaught client errors, no 5xx, no horizontal overflow
+
+### Screenshots (COMPLETED)
+
+`docs/screenshots/` now holds five real captures taken from the deployed URL
+above (1440x900 at 2x, light theme): `overview.png`, `skills.png`,
+`roles.png`, `role-detail.png`, `career-path.png`. They are referenced from
+the README's Screenshots section with descriptive alt text.
+
 ### Still pending before submission
 
-- Deploy the app somewhere with a Node runtime and outbound Bolt access,
-  and verify the deployed demo end-to-end. **No deployment exists yet.**
-- Capture real screenshots from the finished app and add them to
-  `docs/screenshots/` and the README's Screenshots section.
-- Record the screen recording using `docs/screen-recording-script.md`.
+- Record the screen recording using `docs/screen-recording-script.md`. The
+  script covers all ten required beats, including the graph-model explanation
+  and the CognoDB / parameterized Cypher / official-driver points.
 - Submission email (explicitly not sent — not requested yet).
+- PR #4 is intentionally still open and unmerged.
 
 ## Important implementation philosophy
 

@@ -1,19 +1,17 @@
 # Screenshots
 
-Empty for now.
+These are captured from the deployed demo
+(https://skillgraph-217700153550.us-central1.run.app), which runs against the
+hosted CognoDB instance — not from a local stand-in database. Every number
+visible in them is the result of a live graph traversal.
 
-Screenshots taken during development ran against a temporary, disposable local
-Neo4j instance, not the hosted CognoDB instance, and are intentionally not
-included here to avoid implying they came from the final hosted demo.
+| File | Page | What it shows |
+| --- | --- | --- |
+| `overview.png` | `/` | Profile, summary metrics, strongest role match (Full Stack Developer, 80%) |
+| `skills.png` | `/skills` | Declared skills vs. project-derived evidence (Neo4j, Node.js, Tailwind CSS) |
+| `roles.png` | `/roles` | All roles ranked by skill match |
+| `role-detail.png` | `/roles/role-full-stack-developer` | Matched skills, the Node.js gap, hiring companies, career path |
+| `career-path.png` | `/career-path` | Role picker and the `RELATED_TO` step diagram |
 
-Once the app is deployed with a working connection to the hosted CognoDB
-instance, add screenshots here using descriptive filenames, for example:
-
-- `01-overview.png`
-- `02-skills-project-evidence.png`
-- `03-roles-list.png`
-- `04-role-detail-full-stack-developer.png`
-- `05-career-path.png`
-- `06-mobile-overview.png` (optional)
-
-Then reference them from the "Screenshots" section of the root `README.md`.
+Captured at a 1440x900 viewport at 2x device scale, light theme, full page.
+They are referenced from the "Screenshots" section of the root `README.md`.

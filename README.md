@@ -8,7 +8,7 @@ This is a take-home assessment (Full Stack Developer Intern — CognoDB, Wexa AI
 
 ## Current development status
 
-Phase 1 (foundation), Phase 2 (graph model, seed data, seed script, query layer), Phase 3 (API layer), and Phase 4 (career-explorer frontend) are complete and merged. Phase 5 completed **live validation against the hosted CognoDB instance** from a local development machine: health check, seed (run twice, idempotent), every API route, and a real-browser click-through of every page all pass against the real instance. Deployment is still outstanding. See the Assignment Notes / Verification section near the end of this README for the exact, current status.
+Phase 1 (foundation), Phase 2 (graph model, seed data, seed script, query layer), Phase 3 (API layer), and Phase 4 (career-explorer frontend) are complete and merged. Phase 5 completed **live validation against the hosted CognoDB instance** and **deployed the application publicly**: health check, seed (run twice, idempotent), every API route, and a real-browser click-through of every page all pass against the real instance, both locally and on the deployed demo at [https://skillgraph-217700153550.us-central1.run.app](https://skillgraph-217700153550.us-central1.run.app). See the Assignment Notes / Verification section near the end of this README for the full record.
 
 New contributors and AI coding agents should read [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) first. It documents the assessment requirements, the graph model, the phase plan, the secrets policy, and the rules for continuing this project.
 
@@ -207,11 +207,11 @@ CREATE CONSTRAINT developer_id_unique IF NOT EXISTS FOR (n:Developer) REQUIRE n.
 
 (one such constraint per node label). This syntax has been **executed successfully against the hosted CognoDB instance** — `npm run seed` runs `ensureSchema` first and completed without error on both runs, so CognoDB accepts this constraint syntax.
 
-### Pattern-existence predicates are not supported
+### Expressing anti-joins
 
-Live validation against the hosted instance surfaced one real behavioural difference from Neo4j, which the query layer is written around.
+Live verification against the hosted instance surfaced one compatibility detail worth recording, since it shaped how the query layer expresses "required skills the developer does not have".
 
-CognoDB evaluates a **pattern-existence predicate in a `WHERE` clause as `false`** instead of matching it. It does not raise an error — it silently returns no rows. Every one of these forms returned `0` rows against the hosted instance, where Neo4j returns the 4 matching skills:
+On CognoDB, a **pattern-existence predicate used inside a `WHERE` clause** did not behave as it does on Neo4j: rather than matching, it evaluated as `false`, and no error was raised. Each of the following returned `0` rows against the hosted instance, where the equivalent Neo4j query returns the 4 matching skills:
 
 ```cypher
 WHERE (:Developer {id: $developerId})-[:HAS_SKILL]->(s)   -- anonymous node, inline property
@@ -221,9 +221,9 @@ WHERE exists { MATCH (:Developer {id: $id})-[:HAS_SKILL]->(s) }
 WHERE EXISTS((:Developer {id: $id})-[:HAS_SKILL]->(s))
 ```
 
-Because the positive form is always `false`, the negated form (`WHERE NOT (...)`) is always `true`. `getSkillGapForRole` originally used `WHERE NOT (:Developer {id: $developerId})-[:HAS_SKILL]->(s)`, which on CognoDB reported *every* required skill as missing and drove the role detail view to `0%`.
+Since the positive form evaluated as `false`, the negated form (`WHERE NOT (...)`) evaluated as `true` for every row. `getSkillGapForRole` originally used `WHERE NOT (:Developer {id: $developerId})-[:HAS_SKILL]->(s)`, so on CognoDB it reported *every* required skill as missing and the role detail view showed `0%`.
 
-The fix is to express the anti-join with `OPTIONAL MATCH` + `IS NULL`, which CognoDB handles correctly:
+The anti-join is instead expressed with `OPTIONAL MATCH` + `IS NULL`, which CognoDB evaluates as expected:
 
 ```cypher
 MATCH (r:Role {id: $roleId})-[req:REQUIRES]->(s:Skill)
@@ -235,7 +235,7 @@ RETURN s.id AS id, s.name AS name, s.category AS category,
 ORDER BY req.importance, s.name
 ```
 
-This is the same idiom `getMatchingRolesForDeveloper` already used (`OPTIONAL MATCH` + `IS NOT NULL`), which is why the role *list* was always correct while the role *detail* was not. Plain `MATCH` traversal, `OPTIONAL MATCH`, `shortestPath`, variable-length patterns, `UNWIND`/`MERGE`, and aggregation all behave as expected on CognoDB. **When writing new queries for this project, use `OPTIONAL MATCH` + `IS NULL`/`IS NOT NULL` rather than pattern-existence predicates.**
+This is the same idiom `getMatchingRolesForDeveloper` already used (`OPTIONAL MATCH` + `IS NOT NULL`), which is why the role *list* was correct throughout while the role *detail* was not — a useful reminder that verifying against the real target database catches what a local stand-in cannot. Everything else the project relies on behaves as expected on CognoDB: plain `MATCH` traversal, `OPTIONAL MATCH`, `shortestPath`, variable-length patterns, `UNWIND`/`MERGE`, constraint creation, and aggregation. **Convention for new queries in this project: express existence and absence with `OPTIONAL MATCH` plus `IS NOT NULL`/`IS NULL`.**
 
 ## API Layer
 
@@ -338,11 +338,52 @@ Every data-driven section has all three states, not just a happy path:
 
 ## Screenshots
 
-Not included yet. The app has been validated in a real browser against the hosted CognoDB instance (see Assignment Notes / Verification below), but no final submission screenshots have been captured and committed yet. This section will be filled in with real screenshots rather than development-time captures.
+All captured from the deployed demo above, running against the hosted CognoDB instance.
+
+### Overview
+
+The developer's profile, summary metrics, and strongest role match.
+
+![SkillGraph overview page showing Patrick Adegbesan's profile, metric cards for direct skills, project-derived skills, projects and career opportunities, and a Full Stack Developer best-match card at 80%](docs/screenshots/overview.png)
+
+### Skills
+
+Declared skills separated from skills evidenced only by project work — Neo4j, Node.js and Tailwind CSS appear under "Seen in your projects" because they come from the two-hop `Developer -> BUILT -> Project -> USES -> Skill` traversal.
+
+![SkillGraph skills page listing eight direct skills with levels and years, and three project-derived skills: Neo4j, Node.js and Tailwind CSS](docs/screenshots/skills.png)
+
+### Roles
+
+Every role ranked by how many of its required skills the developer already has.
+
+![SkillGraph roles page showing roles ranked by match percentage, led by Full Stack Developer at 80% with 4 of 5 skills](docs/screenshots/roles.png)
+
+### Role detail
+
+Matched skills, the specific gap, hiring companies, and the career path — Node.js is the single missing requirement.
+
+![Full Stack Developer role detail showing 80% match, four matched skills, Node.js listed as the missing skill, three companies offering the role, and a JavaScript to TypeScript career path](docs/screenshots/role-detail.png)
+
+### Career path
+
+The bounded `RELATED_TO` traversal from a skill the developer already has toward the target role.
+
+![SkillGraph career path page with a role picker and a step diagram connecting JavaScript to TypeScript to Full Stack Developer](docs/screenshots/career-path.png)
 
 ## Live Demo
 
-Not deployed yet. The application has been validated locally against the hosted CognoDB instance, but no public deployment exists. This section will contain the real, working, publicly reachable demo URL once deployment is complete.
+**https://skillgraph-217700153550.us-central1.run.app**
+
+Publicly reachable, no login required. The deployed service connects to the same hosted CognoDB instance described below — the numbers on screen are live graph traversals, not fixtures.
+
+Quick check:
+
+```bash
+curl -s https://skillgraph-217700153550.us-central1.run.app/api/health
+# {"status":"ok","database":"reachable"}
+```
+
+It runs on Google Cloud Run as a container built from the [`Dockerfile`](Dockerfile) in this repository (Next.js `output: "standalone"`, Node 20). The three CognoDB variables are injected at runtime from Google Secret Manager and are never baked into the image — see [`.dockerignore`](.dockerignore), which excludes every `.env*` file. The service scales to zero when idle, so a first request after a quiet period may take a few seconds to warm up.
 
 ## Local Setup
 
@@ -386,6 +427,42 @@ npm run build
 ```
 
 `COGNODB_URI`, `COGNODB_USERNAME`, and `COGNODB_PASSWORD` are read only by server-side code. They do not use the `NEXT_PUBLIC_` prefix and are therefore never included in the browser bundle.
+
+## Deploying
+
+The deployed demo runs on Google Cloud Run as a container. The app must run as
+a real Node.js server — every route under `/api` executes server-side and opens
+a Bolt connection to CognoDB — so it is deliberately **not** a static export.
+
+[`Dockerfile`](Dockerfile) builds a three-stage image using Next.js
+`output: "standalone"`, so the runtime layer ships only the traced files rather
+than the whole `node_modules` tree. It runs as a non-root user and honours the
+`PORT` and `HOSTNAME` variables Cloud Run injects.
+
+Credentials are never baked into the image: [`.dockerignore`](.dockerignore) and
+[`.gcloudignore`](.gcloudignore) both exclude every `.env*` file, and the three
+CognoDB values are stored in Google Secret Manager and mounted as environment
+variables at runtime.
+
+```bash
+# one-time: store credentials (values are read from your local .env.local,
+# never committed and never passed on the command line)
+gcloud secrets create skillgraph-cognodb-uri      --data-file=- --replication-policy=automatic
+gcloud secrets create skillgraph-cognodb-username --data-file=- --replication-policy=automatic
+gcloud secrets create skillgraph-cognodb-password --data-file=- --replication-policy=automatic
+
+gcloud run deploy skillgraph \
+  --source . \
+  --region=us-central1 \
+  --allow-unauthenticated \
+  --set-secrets=COGNODB_URI=skillgraph-cognodb-uri:latest,\
+COGNODB_USERNAME=skillgraph-cognodb-username:latest,\
+COGNODB_PASSWORD=skillgraph-cognodb-password:latest
+```
+
+The service scales to zero when idle. Any host that runs a Node.js server and
+allows outbound Bolt connections works equally well — nothing in the app is
+tied to Cloud Run.
 
 ## Architecture
 
@@ -457,6 +534,13 @@ npm audit          # 0 vulnerabilities
 
 **Local integration verification (done earlier):** the seed script, every Cypher query, and the full UI were also exercised against a temporary, disposable Neo4j 5.26 instance across Phases 2–4, covering every API route's success/empty/404/503 responses (including the `503` database-down path, which is not safe to test against the hosted instance) and a real-browser desktop + mobile click-through of every page.
 
-**Deployment:** not completed. No public deployment of this application exists yet. The Live Demo and Screenshots sections above are placeholders for that reason, not oversights.
+**Deployment (done):** the application is deployed publicly on **Google Cloud Run** at [https://skillgraph-217700153550.us-central1.run.app](https://skillgraph-217700153550.us-central1.run.app), built from the [`Dockerfile`](Dockerfile) in this repository via Cloud Build. Verified on the deployed service, not just locally:
 
-**What this means for submission:** the graph model, seed data, query layer, API layer, and frontend are complete and verified end-to-end against the actual hosted CognoDB instance. What remains before this is submission-ready is (1) deploying the app somewhere with a Node runtime and outbound Bolt access, and verifying the deployed demo, (2) capturing real screenshots for the Screenshots section, and (3) recording the screen recording using `docs/screen-recording-script.md`.
+- `GET /api/health` returns `{"status":"ok","database":"reachable"}` (HTTP 200), confirming the deployed container reaches the hosted CognoDB instance over Bolt.
+- The API returns correct live data in production: `projectDerivedOnlySkills` is Neo4j, Node.js and Tailwind CSS; the top role is Full Stack Developer at 80% (4 of 5) with Node.js the missing skill; the career-path route returns the 1-hop JavaScript → TypeScript path.
+- Production error handling matches local behaviour: unknown developer and unknown role return `404`, malformed ids return `400`, and a role with no reachable path returns `{"found":false,"path":null}` with HTTP 200.
+- All five pages were loaded in a real browser against the deployed URL at 1440px and 390px — no blank screens, no uncaught client errors, no `5xx`, no horizontal overflow. The screenshots above are captured from this deployment.
+
+Credentials are supplied at runtime from Google Secret Manager and are not present in the image, the repository, or any `NEXT_PUBLIC_` variable.
+
+**What this means for submission:** the graph model, seed data, query layer, API layer, and frontend are complete and verified end-to-end against the actual hosted CognoDB instance, both locally and on the public deployment. The screenshots above are real captures from that deployment. The one remaining item is the screen recording, for which `docs/screen-recording-script.md` is a beat-by-beat script.

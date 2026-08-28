@@ -1,0 +1,14 @@
+# Controls what `gcloud run deploy --source .` uploads to Cloud Build.
+# Without this file gcloud derives exclusions from .gitignore; being explicit
+# guarantees local credentials are never uploaded.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+node_modules
+.next
+docs
+.git-corrupt-backup-*
+tsconfig.tsbuildinfo
