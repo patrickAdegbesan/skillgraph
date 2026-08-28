@@ -4,7 +4,7 @@ SkillGraph is a graph-powered career and skill path explorer. It will help peopl
 
 ## Current development status
 
-Phase 1 (foundation) is complete and the live CognoDB connection has been verified. Phase 2 — the graph data model, realistic seed data, an idempotent seed script, and the foundational query layer — is complete in code, but has not been run against a live CognoDB instance from this environment (no credentials configured here). See `PROJECT_HANDOFF.md` for details and the steps to run `npm run seed` locally. Phase 3 — the product query layer wired into API routes — is the next implementation phase.
+Phase 1 (foundation) is complete and the live CognoDB connection has been verified. Phase 2 (graph model, seed data, seed script, query layer) is complete and merged. Phase 3 — API routes exposing the query/service layer to the application — is complete in code; see the API Layer section below. Live verification of both phases against the hosted CognoDB instance is still pending (see the Seed Data and API Layer sections for why). Phase 4 — the polished frontend/UI — is the next implementation phase.
 
 New contributors and AI coding agents should read [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) first. It documents the assessment requirements, the graph model, the phase plan, the secrets policy, and the rules for continuing this project.
 
@@ -25,7 +25,16 @@ Phase 2 added the graph data model, realistic seed data, an idempotent seed scri
 - a parameterized query layer in `src/lib/queries/`, including a 2-hop traversal and a shortest-path career query
 - a thin service layer in `src/lib/services/` wrapping the query layer for future API routes
 
-Product queries wired into the UI, and the final interface, are reserved for later phases.
+Phase 3 exposed the graph functionality through a server/API layer, keeping the architecture `UI -> API/server -> service layer -> query layer -> CognoDB` and Cypher confined entirely to the query layer:
+
+- foundational lookups added to the query layer: `getDeveloperById`, `getDeveloperProjects`, `getRoleById`, `getRoleRequirements`
+- role matching upgraded to a product-friendly result (match percentage, matched skills, missing skill count)
+- project-derived skill evidence (`directSkills` / `projectDerivedSkills` / `projectDerivedOnlySkills`) exposed as its own result
+- a composed role-detail-for-developer service result (requirements, matches, gaps, companies, career path) built by calling several focused queries rather than one large one
+- the career-path traversal wrapped into an application-friendly shape (`startingSkill`, `targetSkill`, `steps`, `hopCount`)
+- seven Next.js API routes under `src/app/api/developers/`, using a shared `{ data }` / `{ error }` response shape, Zod-validated route parameters, and sanitized error handling
+
+The polished frontend/UI is reserved for a later phase.
 
 ## Why a Graph Database?
 
@@ -174,6 +183,69 @@ CREATE CONSTRAINT developer_id_unique IF NOT EXISTS FOR (n:Developer) REQUIRE n.
 ```
 
 (one such constraint per node label). This syntax was validated by running it, along with the full seed script and query layer, against a temporary Neo4j 5.26 instance. It has **not** been executed against the hosted CognoDB instance from this sandbox, because this environment cannot open outbound Bolt connections to any host, hosted CognoDB included. No claim is made that this constraint syntax has been verified against CognoDB itself — that verification is still pending and should be done by whoever has direct network access to the instance.
+
+## API Layer
+
+The application talks to CognoDB only through this pipeline:
+
+```
+UI  ->  API route (src/app/api)  ->  service layer (src/lib/services)  ->  query layer (src/lib/queries)  ->  CognoDB
+```
+
+Cypher lives only in `src/lib/queries/`. Route handlers and the service layer never see a Neo4j `Session`, `Record`, `Node`, or `Integer` — the query layer always returns plain typed objects (numbers extracted with `.toNumber()`, node/relationship properties mapped onto interfaces from `src/lib/types/graph.ts`).
+
+### Endpoints
+
+| Method & path | Returns |
+| --- | --- |
+| `GET /api/developers/[developerId]` | Developer profile |
+| `GET /api/developers/[developerId]/skills` | Direct `HAS_SKILL` skills |
+| `GET /api/developers/[developerId]/projects` | Projects the developer built |
+| `GET /api/developers/[developerId]/project-skills` | `{ directSkills, projectDerivedSkills, projectDerivedOnlySkills }` |
+| `GET /api/developers/[developerId]/roles` | Ranked role matches |
+| `GET /api/developers/[developerId]/roles/[roleId]` | Full role detail + skill gap for that developer |
+| `GET /api/developers/[developerId]/roles/[roleId]/path` | Career skill path to that role |
+
+Every route validates its dynamic `[...]` segments with Zod (`src/lib/http/params.ts` — must be a non-empty, lowercase, hyphenated identifier) before touching the database, and returns one of two shapes:
+
+```json
+{ "data": ... }
+```
+```json
+{ "error": { "code": "NOT_FOUND", "message": "Developer not found." } }
+```
+
+Error codes used: `BAD_REQUEST` (400, malformed id), `NOT_FOUND` (404, developer or role does not exist), `SERVICE_UNAVAILABLE` (503, CognoDB unreachable). A route never returns a generic 500 — every CognoDB/driver failure is caught by `handleApiErrors` in `src/lib/http/response.ts`, logged server-side only, and turned into the sanitized 503 shape above; no stack trace, connection URI, username, or password ever reaches the response body.
+
+### Empty states are not errors
+
+- Developer or role doesn't exist → `404 NOT_FOUND`.
+- Developer exists but has no skills, no matching roles, or a role has no companies → `200` with an empty array — a real, meaningful result, not an error.
+- No career-path connection exists within the traversal bound → `200` with `{ "found": false, "path": null }` — this is an expected graph outcome (see Career Path Query above), not a failure.
+- CognoDB unreachable → `503 SERVICE_UNAVAILABLE` for every affected route.
+
+### Role matching
+
+`getMatchingRoles` (service layer) takes the raw per-role counts from the query layer and adds the product-facing fields:
+
+```ts
+matchPercentage = requiredSkillCount === 0 ? 0 : Math.round((matchedSkillCount / requiredSkillCount) * 100)
+missingSkillCount = requiredSkillCount - matchedSkillCount
+```
+
+Each result also carries `matchedSkills` (id/name pairs) straight from the query layer, so a UI can show *which* skills matched without a second request. Ordering is deterministic: `matchedSkillCount DESC, requiredSkillCount ASC, title ASC` — ties are always broken the same way.
+
+### Project-derived skills
+
+`getDeveloperSkillEvidence` (service layer) calls `getDeveloperSkills` (direct `HAS_SKILL`) and `getSkillsInferredFromProjects` (the `Developer -> BUILT -> Project -> USES -> Skill` 2-hop traversal) and diffs them by id to produce `projectDerivedOnlySkills` — skills the developer demonstrably used in a project but has not declared as a direct skill. This evidence is read-only: it is never written back as a `HAS_SKILL` relationship, because project exposure and self-declared proficiency are different claims.
+
+### Role detail / skill gap
+
+`getRoleDetailForDeveloper` composes the role profile, required skills, skill gap, offering companies, career path, and the developer's own skills through `Promise.all` over the existing focused queries/services, rather than one large aggregate Cypher query — each piece stays independently testable and readable.
+
+### Career path
+
+`getCareerPathToRole` wraps the existing bounded `shortestPath` traversal into `{ startingSkill, targetSkill, steps, hopCount }`. The response never implies the developer already has the intermediate or target skills — it represents a possible learning connection through the skill graph, not a guaranteed outcome.
 
 ## Tech stack
 

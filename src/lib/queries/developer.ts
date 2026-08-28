@@ -1,6 +1,47 @@
 import type { Session } from "neo4j-driver";
 
-import type { DeveloperSkill, SkillNode } from "@/lib/types/graph";
+import type { DeveloperNode, DeveloperSkill, ProjectNode, SkillNode } from "@/lib/types/graph";
+
+export async function getDeveloperById(
+  session: Session,
+  developerId: string,
+): Promise<DeveloperNode | null> {
+  const result = await session.run(
+    `MATCH (d:Developer {id: $developerId})
+     RETURN d.id AS id, d.name AS name, d.title AS title, d.bio AS bio`,
+    { developerId },
+  );
+
+  const record = result.records[0];
+  if (!record) {
+    return null;
+  }
+
+  return {
+    id: record.get("id"),
+    name: record.get("name"),
+    title: record.get("title"),
+    bio: record.get("bio"),
+  };
+}
+
+export async function getDeveloperProjects(
+  session: Session,
+  developerId: string,
+): Promise<ProjectNode[]> {
+  const result = await session.run(
+    `MATCH (d:Developer {id: $developerId})-[:BUILT]->(p:Project)
+     RETURN p.id AS id, p.name AS name, p.description AS description
+     ORDER BY p.name`,
+    { developerId },
+  );
+
+  return result.records.map((record) => ({
+    id: record.get("id"),
+    name: record.get("name"),
+    description: record.get("description"),
+  }));
+}
 
 export async function getDeveloperSkills(
   session: Session,
