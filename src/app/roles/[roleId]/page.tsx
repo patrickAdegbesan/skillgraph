@@ -96,7 +96,7 @@ export default function RoleDetailPage() {
         {missingSkills.length === 0 ? (
           <EmptyState
             title="Nothing missing"
-            description="This developer already meets every required skill for this role."
+            description="This developer already has every required skill listed for this role."
           />
         ) : (
           <SkillGapList skills={missingSkills} />
