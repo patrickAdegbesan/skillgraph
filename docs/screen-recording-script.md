@@ -27,16 +27,29 @@ development process; keep the language aimed at a nontechnical evaluator.
    skill through to the role. One sentence: "This traces a path through
    related skills already in the graph — it's a possible learning
    connection, not a promise that finishing it gets you the job."
-7. **One sentence on the tech**: "Under the hood this is CognoDB — a graph
-   database — queried with Cypher through the official Neo4j driver, so
-   these are real graph traversals, not hand-joined tables."
-8. **End card / final seconds**: show the repository URL and the deployed
-   demo URL on screen (read them or leave them visible long enough to read).
+7. **Brief graph-model explanation.** Show the graph data model diagram
+   from the README (or just describe it over the Career Path screen).
+   Name the five node types and how they connect: "A Developer *has*
+   Skills and *built* Projects; those Projects *use* Skills; a Role
+   *requires* Skills; a Company *offers* Roles; and Skills are *related
+   to* other Skills. Every screen you just saw is one traversal across
+   those relationships." Make the point that the role match is not a
+   stored score — it is counted live by walking from the developer's
+   skills to each role's requirements.
+8. **One sentence on the tech**: "Under the hood this is CognoDB — a graph
+   database — queried with parameterized Cypher through the official
+   Neo4j driver. Every query is parameterized, so values are never
+   concatenated into query strings, and all of it runs server-side."
+9. **End card / final seconds**: show the repository URL and the deployed
+   demo URL on screen (read them or leave them visible long enough to
+   read).
 
 ## Notes for whoever records this
 
 - Do the whole thing as one continuous click-through — no cuts needed if
-  each beat above takes 15–25 seconds.
+  each beat above takes 15–25 seconds. With nine beats, budget roughly 20
+  seconds each to land inside the 2–4 minute target; beats 1–6 are the
+  product story and deserve the most time, beats 7–8 can be brisk.
 - If a role with no career path is available at recording time, it's worth
   a 5-second aside showing that empty state ("no short learning path was
   found") so the recording demonstrates the app doesn't fake a path when
