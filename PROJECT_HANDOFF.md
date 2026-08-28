@@ -341,16 +341,67 @@ the same reason as Phase 2: this sandbox cannot open outbound Bolt (raw
 TCP) connections to any host. This is a sandbox network-policy limitation,
 not a code, credentials, or CognoDB issue.
 
-## Phase 4
+## Phase 4 status
 
-Frontend:
+Phase 4 is complete in code. As with Phases 2 and 3, it has not been run
+against the hosted CognoDB instance from this environment (no outbound Bolt
+access from this sandbox).
 
-- Polished application shell
-- Dashboard
-- Developer profile
-- Role views
-- Career Path Explorer
-- Relationship visualization
+Implemented:
+
+- `src/components/AppShell.tsx` — branded, responsive application shell
+  (top nav: Overview, Skills, Roles, Career Path; mobile menu; active-link
+  state)
+- `src/app/page.tsx` (Overview) — developer header, summary metrics
+  (direct skills, seen-in-projects, projects, career opportunities), and a
+  featured "best role match" card with a CTA into that role
+- `src/app/skills/page.tsx` — direct skills vs. skills evidenced through
+  project work (`projectDerivedOnlySkills`, worded "Seen in your
+  projects"), plus the developer's projects for context
+- `src/app/roles/page.tsx` and `src/app/roles/[roleId]/page.tsx` — ranked
+  role-match cards (match %, matched/missing counts, matched skill pills)
+  and a full role detail view (matched/missing/required skills, companies,
+  career path) — all ordering and scoring taken directly from the API, no
+  client-side re-scoring
+- `src/app/career-path/page.tsx` + `src/components/CareerPathVisualization.tsx`
+  — a small, focused step-diagram visualization of the bounded
+  `RELATED_TO` traversal, with a role picker defaulting to the developer's
+  best match; a dedicated empty state for "no path found" distinct from an
+  error
+- `src/lib/api/useApiResource.ts` — the only place in the frontend that
+  calls `fetch`; returns loading/success/error state consumed by every
+  page; `src/lib/constants.ts` — `DEFAULT_DEVELOPER_ID` (Patrick), no
+  login/auth added
+- Reusable components: `DeveloperHeader`, `MetricCard`, `SkillBadge`,
+  `RoleMatchCard`, `MatchProgress`, `SkillGapList`, `CompanyList`,
+  `EmptyState`, `ErrorState`, `LoadingSkeleton.tsx` primitives
+- Design tokens as CSS variables in `src/app/globals.css` (accent,
+  surface, border, status colors) with a dark-mode override
+- New dependency: `lucide-react` (icons only)
+
+Verification:
+
+```bash
+npm run lint       # pass
+npm run typecheck  # pass
+npm run build      # pass
+```
+
+All pages, plus loading states, empty states (no direct skills, no
+project-derived-only skills, no matched roles, no missing skills, no
+companies, no career path found), a 503 (database down, sanitized message
++ working retry), a 404 (role not found, message shown with no retry
+button), and mobile (375–390px) layouts were exercised with a real browser
+(Playwright, screenshots) against a temporary, disposable Neo4j 5.26
+instance — not the hosted CognoDB instance. The temporary Neo4j container
+and its `.env.local` were removed after verification; the original hosted
+`.env.local` was restored. No test framework was added — verification was
+visual/manual plus lint/typecheck/build, per the assignment's
+proportionality guidance.
+
+Live execution against the hosted CognoDB instance remains pending for the
+same reason as Phases 2 and 3: this sandbox cannot open outbound Bolt (raw
+TCP) connections to any host.
 
 ## Phase 5
 

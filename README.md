@@ -4,7 +4,7 @@ SkillGraph is a graph-powered career and skill path explorer. It will help peopl
 
 ## Current development status
 
-Phase 1 (foundation) is complete and the live CognoDB connection has been verified. Phase 2 (graph model, seed data, seed script, query layer) is complete and merged. Phase 3 — API routes exposing the query/service layer to the application — is complete in code; see the API Layer section below. Live verification of both phases against the hosted CognoDB instance is still pending (see the Seed Data and API Layer sections for why). Phase 4 — the polished frontend/UI — is the next implementation phase.
+Phase 1 (foundation) is complete and the live CognoDB connection has been verified. Phases 2 (graph model, seed data, seed script, query layer) and 3 (API layer) are complete and merged. Phase 4 — the polished career-explorer frontend — is complete in code; see the Frontend section below. Live verification of Phases 2–4 against the hosted CognoDB instance is still pending (see the Seed Data, API Layer, and Frontend sections for why). Deployment, screenshots, and the hosted demo are the next steps.
 
 New contributors and AI coding agents should read [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) first. It documents the assessment requirements, the graph model, the phase plan, the secrets policy, and the rules for continuing this project.
 
@@ -34,7 +34,16 @@ Phase 3 exposed the graph functionality through a server/API layer, keeping the 
 - the career-path traversal wrapped into an application-friendly shape (`startingSkill`, `targetSkill`, `steps`, `hopCount`)
 - seven Next.js API routes under `src/app/api/developers/`, using a shared `{ data }` / `{ error }` response shape, Zod-validated route parameters, and sanitized error handling
 
-The polished frontend/UI is reserved for a later phase.
+Phase 4 built the user-facing career explorer on top of that API, defaulting to the demo persona Patrick Adegbesan (`dev-patrick-adegbesan`) with no login required:
+
+- an application shell (`src/components/AppShell.tsx`) with SkillGraph branding, a responsive top nav (Overview, Skills, Roles, Career Path), and a mobile menu
+- an Overview page summarizing the developer's profile, key metrics, and best role match
+- a Skills page distinguishing direct (declared) skills from skills only evidenced through project work
+- a Roles page and per-role detail page built on the role-matching and role-detail API responses
+- a Career Path page visualizing the bounded skill-path traversal, with a role picker defaulting to the developer's best match
+- reusable UI primitives (`SkillBadge`, `RoleMatchCard`, `MatchProgress`, `SkillGapList`, `CompanyList`, `CareerPathVisualization`, `EmptyState`, `ErrorState`, loading skeletons) and a small `useApiResource` hook that fetches from the API routes and exposes loading/success/error state to each page
+
+See the Frontend section below for the full UI architecture, state handling, and career-path visualization details.
 
 ## Why a Graph Database?
 
@@ -246,6 +255,46 @@ Each result also carries `matchedSkills` (id/name pairs) straight from the query
 ### Career path
 
 `getCareerPathToRole` wraps the existing bounded `shortestPath` traversal into `{ startingSkill, targetSkill, steps, hopCount }`. The response never implies the developer already has the intermediate or target skills — it represents a possible learning connection through the skill graph, not a guaranteed outcome.
+
+## Frontend
+
+### Screenshots
+
+Not included yet — this section will be filled in once a hosted demo exists to capture from (see Current development status above). Screenshots taken during development against a temporary local database are not included here to avoid implying they were captured from the hosted CognoDB instance.
+
+### Main user flow
+
+The app opens directly into a useful demo state — no login, no id to type in — using `dev-patrick-adegbesan` as the default developer (`src/lib/constants.ts`). The intended flow:
+
+```
+Overview  ->  Skills  ->  Roles  ->  Role detail  ->  Career Path
+```
+
+Overview answers "what's my situation at a glance"; Skills answers "what do I actually know, and what does my project work show"; Roles answers "what fits me"; a role's detail page answers "what's the gap, and who's hiring"; Career Path answers "how do my current skills connect to a role I don't fully match yet." Nothing on any page requires the visitor to know what Cypher, a graph traversal, or CognoDB are — that language stays in this README and the code comments, not the UI.
+
+### UI architecture
+
+The frontend never imports the service or query layers, and never talks to CognoDB directly — every page goes through the same API routes documented above:
+
+```
+Page component (Client Component)  ->  useApiResource(path)  ->  fetch('/api/developers/...')  ->  API route  ->  service  ->  query  ->  CognoDB
+```
+
+`src/lib/api/useApiResource.ts` is the one place that calls `fetch`. It returns a small discriminated union (`{status: "loading"}` / `{status: "success", data}` / `{status: "error", code, message, httpStatus}`) plus a `refetch()` function, so every page renders its own loading/success/error UI from the same shape without duplicating fetch logic. Pages are Client Components (`"use client"`) specifically so they can show a real loading state between navigation and data arriving, rather than only a server-rendered final result.
+
+Reusable presentation components live in `src/components/`: `AppShell` (branding + nav), `DeveloperHeader`, `MetricCard`, `SkillBadge`, `RoleMatchCard`, `MatchProgress`, `SkillGapList`, `CompanyList`, `CareerPathVisualization`, `EmptyState`, `ErrorState`, and the skeleton primitives in `LoadingSkeleton.tsx`. Design tokens (accent color, surface/border colors, radii) are defined as CSS variables in `src/app/globals.css`, with a dark-mode override via `prefers-color-scheme`, so components reference `var(--accent)`, `var(--surface)`, etc. instead of one-off Tailwind color values.
+
+### Loading, empty, and error states
+
+Every data-driven section has all three states, not just a happy path:
+
+- **Loading** — skeleton placeholders (`CardSkeleton`, `ListSkeleton`, `MetricRowSkeleton`, `TextSkeleton`) shaped like the content that's about to appear, not a bare "Loading…" string.
+- **Empty** — a meaningful, worded explanation via `EmptyState` for each case the API can legitimately return empty: no direct skills, no project-derived-only skills, no matching roles, no missing skills ("this developer already meets every required skill"), no companies offering a role, and no career path found (a dedicated message distinguishing "no short path exists yet" from an error).
+- **Error** — `ErrorState` renders the API's sanitized message (never a raw driver/database error) with a "Try again" retry button that calls `refetch()`. A `404` (developer or role not found) renders its specific message without a retry button, since retrying a genuine not-found doesn't help; a `503` renders "SkillGraph is temporarily unavailable. Please try again." with a working retry.
+
+### Career path visualization
+
+`CareerPathVisualization` renders the bounded `RELATED_TO` traversal from Phase 3 as a small, focused step diagram — skill pill, arrow, skill pill, ... , arrow, into the target role — rather than a large interactive graph library. Each step fades/slides in with a short staggered animation (disabled under `prefers-reduced-motion`). The component is explicit that this is "a possible learning connection," never a guarantee, and the empty state explains that no short path existing yet doesn't mean the role is out of reach. The dedicated `/career-path` page adds a role picker (defaulting to the developer's best match) so a visitor can explore the path toward any role, not just the top one; the same component is reused inside each role's detail page for that specific role.
 
 ## Tech stack
 

@@ -1,69 +1,123 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { Boxes, FolderGit2, Sparkles, Target } from "lucide-react";
+
+import { CardSkeleton, MetricRowSkeleton, TextSkeleton } from "@/components/LoadingSkeleton";
+import { DeveloperHeader } from "@/components/DeveloperHeader";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorState } from "@/components/ErrorState";
+import { MetricCard } from "@/components/MetricCard";
+import { RoleMatchCard } from "@/components/RoleMatchCard";
+import { useApiResource } from "@/lib/api/useApiResource";
+import { DEFAULT_DEVELOPER_ID } from "@/lib/constants";
+import type {
+  DeveloperNode,
+  DeveloperSkill,
+  DeveloperSkillEvidence,
+  ProjectNode,
+  RoleMatchResult,
+} from "@/lib/types/graph";
+
+export default function OverviewPage() {
+  const developer = useApiResource<DeveloperNode>(`/api/developers/${DEFAULT_DEVELOPER_ID}`);
+  const skills = useApiResource<DeveloperSkill[]>(
+    `/api/developers/${DEFAULT_DEVELOPER_ID}/skills`,
+  );
+  const evidence = useApiResource<DeveloperSkillEvidence>(
+    `/api/developers/${DEFAULT_DEVELOPER_ID}/project-skills`,
+  );
+  const projects = useApiResource<ProjectNode[]>(
+    `/api/developers/${DEFAULT_DEVELOPER_ID}/projects`,
+  );
+  const roles = useApiResource<RoleMatchResult[]>(
+    `/api/developers/${DEFAULT_DEVELOPER_ID}/roles`,
+  );
+
+  if (developer.status === "error") {
+    return (
+      <ErrorState
+        title={developer.httpStatus === 404 ? "Developer not found" : undefined}
+        message={developer.message}
+        onRetry={developer.httpStatus === 404 ? undefined : developer.refetch}
+      />
+    );
+  }
+
+  const bestMatch = roles.status === "success" ? roles.data[0] ?? null : null;
+  const opportunityCount =
+    roles.status === "success"
+      ? roles.data.filter((role) => role.matchPercentage > 0).length
+      : null;
+
+  const metricsLoading =
+    skills.status === "loading" ||
+    evidence.status === "loading" ||
+    projects.status === "loading" ||
+    roles.status === "loading";
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+    <div className="flex flex-col gap-10">
+      <section>
+        {developer.status === "loading" ? (
+          <TextSkeleton />
+        ) : (
+          <DeveloperHeader developer={developer.data} />
+        )}
+      </section>
+
+      <section aria-label="Summary metrics">
+        {metricsLoading ? (
+          <MetricRowSkeleton />
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <MetricCard
+              icon={Sparkles}
+              label="Direct skills"
+              value={skills.status === "success" ? skills.data.length : "—"}
+              hint="Skills you've declared"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+            <MetricCard
+              icon={Boxes}
+              label="Seen in projects"
+              value={
+                evidence.status === "success"
+                  ? evidence.data.projectDerivedOnlySkills.length
+                  : "—"
+              }
+              hint="Beyond your declared skills"
+            />
+            <MetricCard
+              icon={FolderGit2}
+              label="Projects"
+              value={projects.status === "success" ? projects.data.length : "—"}
+            />
+            <MetricCard
+              icon={Target}
+              label="Career opportunities"
+              value={opportunityCount ?? "—"}
+              hint="Roles with at least one skill match"
+            />
+          </div>
+        )}
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-lg font-semibold tracking-tight text-[var(--foreground)]">
+          Your strongest match
+        </h2>
+        {roles.status === "loading" ? (
+          <CardSkeleton />
+        ) : roles.status === "error" ? (
+          <ErrorState message={roles.message} onRetry={roles.refetch} />
+        ) : bestMatch ? (
+          <RoleMatchCard role={bestMatch} featured />
+        ) : (
+          <EmptyState
+            title="No role matches yet"
+            description="Once declared skills overlap with a role's requirements, the best match appears here."
+          />
+        )}
+      </section>
     </div>
   );
 }
