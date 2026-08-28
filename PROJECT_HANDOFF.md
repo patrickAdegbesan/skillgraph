@@ -403,34 +403,66 @@ Live execution against the hosted CognoDB instance remains pending for the
 same reason as Phases 2 and 3: this sandbox cannot open outbound Bolt (raw
 TCP) connections to any host.
 
-## Phase 5
+## Phase 5 status (originally planned as "Polish", delivered early + finalization)
 
-Polish:
+The original plan below listed polish (responsive design, skeleton loading,
+empty states, error states, accessibility, restrained motion, visual
+polish) as its own phase. All of it was already delivered as part of Phase
+4 — see the Phase 4 status section above and the README's Frontend section.
+What's actually described here is the finalization/submission work done
+in this session, matching what the original plan below calls "Phase 6".
 
-- Responsive design
-- Skeleton loading
-- Empty states
-- Error states
-- Accessibility
-- Restrained motion
-- Visual polish
+Attempted and completed in this session:
 
-## Phase 6
+- Confirmed `main` at the expected commit; `npm install`, `npm run lint`,
+  `npm run typecheck`, `npm run build`, `npm audit` all pass (0
+  vulnerabilities) before any Phase 5 change was made
+- **Attempted live hosted CognoDB validation** using the real
+  `COGNODB_URI`/`COGNODB_USERNAME`/`COGNODB_PASSWORD` already configured in
+  this environment's `.env.local`. `GET /api/health` returned `503` — the
+  Bolt connection did not succeed. This reproduces the same limitation
+  documented in every prior phase: this sandbox's network policy does not
+  permit outbound raw-TCP (Bolt) connections to any host. It is not a
+  code, credential, or CognoDB-configuration problem, and it was not
+  worked around. **Hosted CognoDB validation, live API/UI validation
+  against the hosted instance, and deployment all remain undone from this
+  environment** for the same root cause — this session has no network
+  path to the instance and no hosting-platform account/credentials to
+  deploy anywhere.
+- Local integration verification (temporary, disposable Neo4j 5.26, as in
+  every prior phase) reconfirmed correct across the seed script, query
+  layer, API, and UI.
+- README finalized to the structure the assignment expects: Use Case, Why
+  a Graph Database?, Graph Data Model, Nodes, Relationships, Seed Data,
+  Important Cypher Queries, Career Path Query, CognoDB Compatibility Note,
+  API Layer, Frontend, Screenshots (placeholder, honestly labeled empty),
+  Live Demo (placeholder, honestly labeled not deployed), Local Setup,
+  Architecture, Error Handling, Health endpoint, Tech Stack, and an
+  Assignment Notes / Verification section stating the above plainly rather
+  than implying hosted validation succeeded.
+- `docs/screenshots/` created (empty, with its own README explaining why)
+  and `docs/screen-recording-script.md` added — a beat-by-beat 2–4 minute
+  recording script for whoever records the final demo, once one exists.
+- Full security review: `git status`/`git diff` clean, `.env.local`
+  confirmed git-ignored and never staged, and `git log --all -p` scanned
+  across the entire history for `COGNODB_PASSWORD=`, `bolt+s://`,
+  `password=`, `token=`, and API-key-shaped strings — nothing found beyond
+  the placeholder values already in `.env.example`.
 
-Submission:
+Still pending before this can be submitted (all blocked on the same two
+things — a network with outbound Bolt access, and a hosting-platform
+account):
 
-- Lint
-- Typecheck
-- Build
-- Testing
-- Security review
-- Final README
-- Architecture diagram
-- Screenshots
-- Hosted deployment
-- Short screen recording
-- Final GitHub repository
-- Submission email
+- Run `npm run seed` (twice, to confirm idempotency) against the actual
+  hosted CognoDB instance and confirm the documented node/relationship
+  counts
+- Exercise the API and UI against the hosted instance specifically (not
+  just a temporary Neo4j stand-in)
+- Deploy the app somewhere with outbound Bolt access, verify the deployed
+  demo end-to-end, and add real screenshots + the live demo URL to the
+  README
+- Record the actual screen recording using the script above
+- Submission email (explicitly not sent — not requested yet)
 
 ## Important implementation philosophy
 
