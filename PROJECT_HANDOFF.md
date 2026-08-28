@@ -226,10 +226,8 @@ The user will configure deployment and server environment variables separately.
 
 ## Phase 2 status
 
-Phase 2 is complete in code. It has not been executed against a live CognoDB
-instance from this environment because no CognoDB credentials are configured
-here (no `.env.local`) — per the rule above, credentials were not invented and
-database functionality was not mocked.
+Phase 2 is complete and has been executed against the live hosted CognoDB
+instance (see the Phase 5 status section for the validation record).
 
 Implemented:
 
@@ -276,24 +274,17 @@ npm run build      # pass
 `data/seed-data.ts` referential integrity (every relationship row references
 an id that exists) was checked programmatically; no missing references.
 
-`npm run seed` was dry-run in this environment and fails with a clear
-"CognoDB environment variables are not configured" error, as expected with no
-`.env.local`. It has not been run against a live database. Whoever has
-CognoDB credentials should run `npm run seed` locally and confirm:
-
-```bash
-curl -s http://localhost:3000/api/health
-```
-
-still returns `{"status":"ok","database":"reachable"}`, and spot-check a
-multi-hop query (e.g. `getMatchingRolesForDeveloper` for
-`dev-patrick-adegbesan`) returns sensible ranked roles.
+`npm run seed` has since been run against the live hosted CognoDB instance
+(twice, confirming idempotency), `GET /api/health` returns
+`{"status":"ok","database":"reachable"}` against it, and
+`getMatchingRolesForDeveloper` for `dev-patrick-adegbesan` returns sensible
+ranked roles led by Full Stack Developer at 80%. See the Phase 5 status
+section for the full record.
 
 ## Phase 3 status
 
-Phase 3 is complete in code. As with Phase 2, it has not been executed against
-the hosted CognoDB instance from this environment (no outbound Bolt access
-from this sandbox — see below).
+Phase 3 is complete and has been executed against the hosted CognoDB instance
+(see the Phase 5 status section).
 
 Implemented:
 
@@ -336,16 +327,14 @@ Neo4j 5.26 instance — not the hosted CognoDB instance. See the README
 added; verification was direct `curl` calls against the running app plus
 `lint`/`typecheck`/`build`.
 
-Live execution against the hosted CognoDB instance remains pending for
-the same reason as Phase 2: this sandbox cannot open outbound Bolt (raw
-TCP) connections to any host. This is a sandbox network-policy limitation,
-not a code, credentials, or CognoDB issue.
+All seven endpoints have since been re-validated against the live hosted
+CognoDB instance from a local machine, including the 404 and 400 cases. See
+the Phase 5 status section.
 
 ## Phase 4 status
 
-Phase 4 is complete in code. As with Phases 2 and 3, it has not been run
-against the hosted CognoDB instance from this environment (no outbound Bolt
-access from this sandbox).
+Phase 4 is complete and has been run against the hosted CognoDB instance
+(see the Phase 5 status section).
 
 Implemented:
 
@@ -399,38 +388,175 @@ and its `.env.local` were removed after verification; the original hosted
 visual/manual plus lint/typecheck/build, per the assignment's
 proportionality guidance.
 
-Live execution against the hosted CognoDB instance remains pending for the
-same reason as Phases 2 and 3: this sandbox cannot open outbound Bolt (raw
-TCP) connections to any host.
+Every page has since been re-validated in a real browser against the live
+hosted CognoDB instance at desktop and 390px mobile viewports. See the
+Phase 5 status section.
 
-## Phase 5
+## Phase 5 status (originally planned as "Polish", delivered early + finalization)
 
-Polish:
+The original plan below listed polish (responsive design, skeleton loading,
+empty states, error states, accessibility, restrained motion, visual
+polish) as its own phase. All of it was already delivered as part of Phase
+4 — see the Phase 4 status section above and the README's Frontend section.
+What's actually described here is the finalization/submission work,
+matching what the original plan below calls "Phase 6".
 
-- Responsive design
-- Skeleton loading
-- Empty states
-- Error states
-- Accessibility
-- Restrained motion
-- Visual polish
+### Finalization work
 
-## Phase 6
+- README finalized to the structure the assignment expects: Use Case, Why
+  a Graph Database?, Graph Data Model, Nodes, Relationships, Seed Data,
+  Important Cypher Queries, Career Path Query, CognoDB Compatibility Note,
+  API Layer, Frontend, Screenshots, Live Demo, Local Setup, Architecture,
+  Error Handling, Health endpoint, Tech Stack, and an Assignment Notes /
+  Verification section.
+- `docs/screenshots/` created (empty, with its own README explaining why)
+  and `docs/screen-recording-script.md` added — a beat-by-beat 2–4 minute
+  recording script for whoever records the final demo.
+- Full security review: `.env.local` confirmed git-ignored and never
+  staged, and `git log --all -p` scanned across the entire history for
+  `COGNODB_PASSWORD=`, `bolt+s://`, `password=`, `token=`, and
+  API-key-shaped strings — nothing found beyond the placeholder values
+  already in `.env.example`.
 
-Submission:
+### Live hosted CognoDB validation (COMPLETED)
 
-- Lint
-- Typecheck
-- Build
-- Testing
-- Security review
-- Final README
-- Architecture diagram
-- Screenshots
-- Hosted deployment
-- Short screen recording
-- Final GitHub repository
-- Submission email
+An earlier remote sandbox could not reach the instance (its network policy
+blocked outbound raw-TCP/Bolt), so this was carried out from a **local
+development machine** with real network access, using the real credentials
+in the git-ignored `.env.local`. Everything below ran against the actual
+hosted CognoDB instance — not a temporary Neo4j stand-in.
+
+- **Health check:** `GET /api/health` returned
+  `{"status":"ok","database":"reachable"}` (HTTP 200).
+- **Seed:** `npm run seed` completed successfully. CognoDB accepted
+  `ensureSchema`'s `CREATE CONSTRAINT ... IF NOT EXISTS` syntax with no
+  error — the constraint-syntax compatibility question raised in earlier
+  phases is resolved.
+- **Idempotency:** `npm run seed` was run a second time and completed
+  successfully. Counts read back from the live instance were identical
+  after both runs, confirming the `MERGE`-based script does not duplicate
+  data:
+
+  | Nodes | Count | Relationships | Count |
+  | --- | --- | --- | --- |
+  | `Developer` | 18 | `HAS_SKILL` | 76 |
+  | `Skill` | 35 | `BUILT` | 19 |
+  | `Project` | 18 | `USES` | 54 |
+  | `Role` | 12 | `REQUIRES` | 48 |
+  | `Company` | 9 | `OFFERS` | 23 |
+  | | | `RELATED_TO` | 26 |
+  | **Total** | **92** | **Total** | **246** |
+
+- **API:** all seven routes returned correct live data for
+  `dev-patrick-adegbesan`. `projectDerivedOnlySkills` returned Neo4j,
+  Node.js and Tailwind CSS. Top role was Full Stack Developer at 80%
+  (4 of 5 required skills) with Node.js the single missing skill. The
+  career-path route returned a 1-hop JavaScript → TypeScript path.
+  Unknown developer and unknown role returned `404`; malformed ids
+  returned `400`; roles with no reachable path returned
+  `{"found":false,"path":null}` with HTTP 200. The `503` path was
+  deliberately **not** exercised — that would have meant disrupting the
+  hosted instance, which is out of scope.
+- **UI:** `/`, `/skills`, `/roles`, `/roles/role-full-stack-developer` and
+  `/career-path` were loaded in a real browser (Chromium via Playwright)
+  against the hosted instance at desktop (1280px) and mobile (390px)
+  viewports. No blank screens, no uncaught client errors, no `5xx`, no
+  horizontal overflow at 390px. Full Stack Developer rendered 80% with
+  Node.js as the missing skill; "Seen in your projects" rendered Neo4j,
+  Node.js and Tailwind CSS; the career-path visualization rendered
+  JavaScript → TypeScript → Full Stack Developer; the no-path case (Cloud
+  Architect) rendered its dedicated empty state; and the not-found and
+  malformed-id pages rendered their respective states rather than blanks.
+
+### Compatibility issue found and fixed
+
+Live validation surfaced one genuine behavioural difference between
+CognoDB and Neo4j.
+
+**CognoDB evaluates pattern-existence predicates in a `WHERE` clause as
+`false` instead of matching them.** It does not raise an error — it
+silently returns no rows. This was confirmed against the live instance for
+the anonymous-node form (with and without inline properties), the
+bound-variable form, the `exists { ... }` subquery form, and the legacy
+`EXISTS(...)` function form. All returned 0 rows where Neo4j returns 4.
+
+Because the positive form is always `false`, the negated form is always
+`true`. `getSkillGapForRole` used
+`WHERE NOT (:Developer {id: $developerId})-[:HAS_SKILL]->(s)`, so on
+CognoDB it reported *every* required skill as missing and the role detail
+view showed `0%` — while the role *list* stayed correct, because
+`getMatchingRolesForDeveloper` already used `OPTIONAL MATCH` +
+`IS NOT NULL`.
+
+The fix rewrites the query as an `OPTIONAL MATCH` + `IS NULL` anti-join,
+the same idiom already used elsewhere in the file. This was the only
+occurrence of the construct in the codebase; no architectural change was
+made. Plain `MATCH`, `OPTIONAL MATCH`, `shortestPath`, variable-length
+patterns, `UNWIND`/`MERGE` and aggregation all behave as expected on
+CognoDB.
+
+**Rule for future work on this project: use `OPTIONAL MATCH` +
+`IS NULL`/`IS NOT NULL` rather than pattern-existence predicates in
+`WHERE` clauses.** See the README's CognoDB Compatibility Note for the
+full detail.
+
+### Verification after the fix
+
+```bash
+npm run lint       # pass
+npm run typecheck  # pass
+npm run build      # pass
+npm audit          # 0 vulnerabilities
+```
+
+### Hosted deployment (COMPLETED)
+
+The application is deployed publicly on **Google Cloud Run**:
+
+```text
+https://skillgraph-217700153550.us-central1.run.app
+```
+
+- Built from the repository `Dockerfile` via Cloud Build (Next.js
+  `output: "standalone"`, Node 20, non-root user). Not a static export —
+  every `/api` route runs server-side and opens a Bolt connection.
+- Deployed into a dedicated GCP project created for this assessment, kept
+  separate from any other workload.
+- The three CognoDB values live in **Google Secret Manager** and are mounted
+  as runtime environment variables. They are absent from the image, the
+  repository, and any `NEXT_PUBLIC_` variable. `.dockerignore` and
+  `.gcloudignore` both exclude every `.env*` file, so `.env.local` is never
+  uploaded to Cloud Build nor copied into a layer.
+- Public (`--allow-unauthenticated`) so a reviewer can open the link. The app
+  is read-only over HTTP; seeding is a local script, not an HTTP route.
+- Scales to zero when idle, so the first request after a quiet period takes a
+  few seconds to warm.
+
+Verified against the deployed service (not just locally):
+
+- `GET /api/health` -> `{"status":"ok","database":"reachable"}` (HTTP 200)
+- `projectDerivedOnlySkills` -> Neo4j, Node.js, Tailwind CSS
+- top role -> Full Stack Developer, 80%, 4 of 5, missing Node.js
+- career path -> JavaScript -> TypeScript, 1 hop
+- unknown developer / unknown role -> 404; malformed id -> 400; no path ->
+  `{"found":false,"path":null}` with HTTP 200
+- all five pages loaded in a real browser at 1440px and 390px: no blank
+  screens, no uncaught client errors, no 5xx, no horizontal overflow
+
+### Screenshots (COMPLETED)
+
+`docs/screenshots/` now holds five real captures taken from the deployed URL
+above (1440x900 at 2x, light theme): `overview.png`, `skills.png`,
+`roles.png`, `role-detail.png`, `career-path.png`. They are referenced from
+the README's Screenshots section with descriptive alt text.
+
+### Still pending before submission
+
+- Record the screen recording using `docs/screen-recording-script.md`. The
+  script covers all ten required beats, including the graph-model explanation
+  and the CognoDB / parameterized Cypher / official-driver points.
+- Submission email (explicitly not sent — not requested yet).
+- PR #4 is intentionally still open and unmerged.
 
 ## Important implementation philosophy
 
