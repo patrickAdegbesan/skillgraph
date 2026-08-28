@@ -47,18 +47,54 @@ export interface DeveloperSkill extends SkillNode {
   years: number;
 }
 
-export interface RoleMatch extends RoleNode {
-  matchedSkillCount: number;
-  requiredSkillCount: number;
+export interface MatchedSkillRef {
+  id: string;
+  name: string;
 }
 
-export interface SkillGapEntry extends SkillNode {
+export interface RoleMatchRaw extends RoleNode {
+  matchedSkillCount: number;
+  requiredSkillCount: number;
+  matchedSkills: MatchedSkillRef[];
+}
+
+export interface RoleMatchResult extends RoleMatchRaw {
+  matchPercentage: number;
+  missingSkillCount: number;
+}
+
+export interface RequiredSkill extends SkillNode {
   minimumLevel: SkillLevel;
   importance: SkillImportance;
 }
+
+export type SkillGapEntry = RequiredSkill;
 
 export interface CareerPathStep {
   id: string;
   name: string;
   kind: "Skill" | "Role";
+}
+
+export interface CareerPath {
+  startingSkill: CareerPathStep;
+  targetSkill: CareerPathStep;
+  steps: CareerPathStep[];
+  hopCount: number;
+}
+
+export interface DeveloperSkillEvidence {
+  directSkills: DeveloperSkill[];
+  projectDerivedSkills: SkillNode[];
+  projectDerivedOnlySkills: SkillNode[];
+}
+
+export interface RoleDetailForDeveloper {
+  role: RoleNode;
+  requiredSkills: RequiredSkill[];
+  matchedSkills: MatchedSkillRef[];
+  missingSkills: RequiredSkill[];
+  matchPercentage: number;
+  companies: CompanyNode[];
+  careerPath: CareerPath | null;
 }

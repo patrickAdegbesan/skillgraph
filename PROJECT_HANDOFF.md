@@ -289,17 +289,57 @@ still returns `{"status":"ok","database":"reachable"}`, and spot-check a
 multi-hop query (e.g. `getMatchingRolesForDeveloper` for
 `dev-patrick-adegbesan`) returns sensible ranked roles.
 
-## Phase 3
+## Phase 3 status
 
-Core graph functionality:
+Phase 3 is complete in code. As with Phase 2, it has not been executed against
+the hosted CognoDB instance from this environment (no outbound Bolt access
+from this sandbox — see below).
 
-- Role matching
-- Skill gaps
-- Project-derived skill matching
-- Companies
-- Career-path traversal
-- Related skill discovery
-- Graceful query errors
+Implemented:
+
+- Query layer additions (`src/lib/queries/developer.ts`, `role.ts`):
+  `getDeveloperById`, `getDeveloperProjects`, `getRoleById`,
+  `getRoleRequirements`; `getMatchingRolesForDeveloper` now also collects
+  each matched skill (id/name), not just counts
+- `src/lib/types/graph.ts`: `RoleMatchRaw`/`RoleMatchResult`,
+  `RequiredSkill`, `CareerPath`, `DeveloperSkillEvidence`,
+  `RoleDetailForDeveloper`, `MatchedSkillRef`
+- Service layer (`src/lib/services/careerService.ts`) rewritten to cover:
+  developer profile/projects/skills, `getDeveloperSkillEvidence` (direct vs.
+  project-derived vs. project-derived-only skills), `getMatchingRoles`
+  (adds `matchPercentage`/`missingSkillCount` on top of the raw query
+  result), `getRoleDetailForDeveloper` (composes role + requirements + gap
+  + companies + career path via `Promise.all`, not one giant query),
+  `getCareerPathToRole` (wraps the shortest-path result into
+  `{startingSkill, targetSkill, steps, hopCount}`)
+- `src/lib/http/response.ts` — shared `{data}`/`{error}` response helpers
+  (`apiSuccess`, `badRequest`, `notFound`, `serviceUnavailable`,
+  `handleApiErrors`); `src/lib/http/params.ts` — Zod id validation
+- Seven API routes under `src/app/api/developers/[developerId]/...` (see
+  README "API Layer" section for the full list). No Cypher outside the
+  query layer; every route validates ids, checks developer/role existence
+  (404 if missing), and returns sanitized 503 on any CognoDB failure
+
+Verification:
+
+```bash
+npm run lint       # pass
+npm run typecheck  # pass
+npm run build      # pass
+```
+
+All seven endpoints, plus not-found (developer and role), invalid-id
+(400), no-career-path-found (`{found:false}`, 200), and database-down
+(503, sanitized) cases were exercised against a temporary, disposable
+Neo4j 5.26 instance — not the hosted CognoDB instance. See the README
+"API Layer" section for representative results. No test framework was
+added; verification was direct `curl` calls against the running app plus
+`lint`/`typecheck`/`build`.
+
+Live execution against the hosted CognoDB instance remains pending for
+the same reason as Phase 2: this sandbox cannot open outbound Bolt (raw
+TCP) connections to any host. This is a sandbox network-policy limitation,
+not a code, credentials, or CognoDB issue.
 
 ## Phase 4
 
