@@ -224,47 +224,70 @@ A new cloud/web agent may not have these environment variables. If credentials a
 
 The user will configure deployment and server environment variables separately.
 
-## Phase 2
+## Phase 2 status
 
-Phase 2 is the next implementation phase.
+Phase 2 is complete in code. It has not been executed against a live CognoDB
+instance from this environment because no CognoDB credentials are configured
+here (no `.env.local`) — per the rule above, credentials were not invented and
+database functionality was not mocked.
 
-It consists of:
+Implemented:
 
-- Graph data model
-- Realistic seed data
-- Idempotent seed script
-- CognoDB-supported constraints/indexes
-- Foundational query layer
-- Verified multi-hop traversal
+- `src/lib/types/graph.ts` — node, relationship-property and query-result
+  types for the graph model
+- `data/seed-data.ts` — realistic seed data: 18 Developers, 35 Skills,
+  18 Projects, 12 Roles, 9 Companies, plus all `HAS_SKILL`, `BUILT`,
+  `USES`, `REQUIRES`, `OFFERS` and `RELATED_TO` relationship rows
+- `src/lib/db/schema.ts` — `ensureSchema` creates a uniqueness constraint on
+  `id` for every node label (idempotent, `IF NOT EXISTS`)
+- `src/lib/db/session.ts` — added `withWriteSession` alongside the existing
+  `withReadSession`, both closing the session in a `finally`
+- `scripts/seed.ts` — idempotent seed script run with `npm run seed`. Order:
+  constraints/indexes -> MERGE nodes -> MERGE relationships, all keyed by the
+  application-level `id`, so re-running it is safe and never wipes the
+  database
+- `src/lib/queries/` — foundational query layer (`developer.ts`, `role.ts`,
+  `company.ts`, `careerPath.ts`), each taking a `Session` and returning typed
+  rows using only parameterized Cypher
+- `src/lib/services/careerService.ts` — thin service layer wrapping the query
+  layer in `withReadSession`, matching the `UI -> API -> service -> query
+  layer -> CognoDB` architecture
 
-Target seed data approximately:
+Traversal requirements satisfied:
 
-- 15-20 Developers
-- 30-40 Skills
-- 15-20 Projects
-- 10-15 Roles
-- 8-10 Companies
+- Multi-hop (2-hop): `getSkillsInferredFromProjects` walks
+  `Developer -[:BUILT]-> Project -[:USES]-> Skill`
+- Query awkward in a relational database: `getMatchingRolesForDeveloper` scores
+  every Role by counting overlapping `REQUIRES`/`HAS_SKILL` skills in one
+  traversal, and `findSkillPathToRole` runs `shortestPath` over a
+  variable-length `RELATED_TO*0..4` pattern between a developer's skills and a
+  role's required skills — both need a traversal depth that isn't fixed in
+  advance, which relational joins can't express without deciding the number
+  of joins up front
 
-Relationship quality matters more than quantity.
-
-Seed data must produce meaningful traversal results.
-
-Create:
+Verification:
 
 ```bash
-npm run seed
+npm run lint       # pass
+npm run typecheck  # pass
+npm run build      # pass
 ```
 
-Prefer this workflow:
+`data/seed-data.ts` referential integrity (every relationship row references
+an id that exists) was checked programmatically; no missing references.
 
-```text
-constraints/indexes
--> MERGE nodes
--> MERGE relationships
--> deterministic SET operations
+`npm run seed` was dry-run in this environment and fails with a clear
+"CognoDB environment variables are not configured" error, as expected with no
+`.env.local`. It has not been run against a live database. Whoever has
+CognoDB credentials should run `npm run seed` locally and confirm:
+
+```bash
+curl -s http://localhost:3000/api/health
 ```
 
-Do not automatically wipe the database.
+still returns `{"status":"ok","database":"reachable"}`, and spot-check a
+multi-hop query (e.g. `getMatchingRolesForDeveloper` for
+`dev-patrick-adegbesan`) returns sensible ranked roles.
 
 ## Phase 3
 

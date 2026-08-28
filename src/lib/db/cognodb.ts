@@ -24,3 +24,12 @@ export function getCognoDbDriver(): Driver {
 
   return driver;
 }
+
+export async function closeCognoDbDriver(): Promise<void> {
+  if (!driver) {
+    return;
+  }
+
+  await driver.close();
+  driver = undefined;
+}

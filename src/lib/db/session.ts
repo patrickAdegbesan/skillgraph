@@ -15,3 +15,17 @@ export async function withReadSession<T>(
     await session.close();
   }
 }
+
+export async function withWriteSession<T>(
+  work: (session: Session) => Promise<T>,
+): Promise<T> {
+  const session = getCognoDbDriver().session({
+    defaultAccessMode: neo4j.session.WRITE,
+  });
+
+  try {
+    return await work(session);
+  } finally {
+    await session.close();
+  }
+}

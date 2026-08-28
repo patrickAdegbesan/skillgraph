@@ -4,7 +4,7 @@ SkillGraph is a graph-powered career and skill path explorer. It will help peopl
 
 ## Current development status
 
-Phase 1 (foundation) is complete and the live CognoDB connection has been verified. Phase 2 — the graph data model, realistic seed data, an idempotent seed script, and the foundational query layer — is the next implementation phase.
+Phase 1 (foundation) is complete and the live CognoDB connection has been verified. Phase 2 — the graph data model, realistic seed data, an idempotent seed script, and the foundational query layer — is complete in code, but has not been run against a live CognoDB instance from this environment (no credentials configured here). See `PROJECT_HANDOFF.md` for details and the steps to run `npm run seed` locally. Phase 3 — the product query layer wired into API routes — is the next implementation phase.
 
 New contributors and AI coding agents should read [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) first. It documents the assessment requirements, the graph model, the phase plan, the secrets policy, and the rules for continuing this project.
 
@@ -17,7 +17,15 @@ Phase 1 established the application foundation:
 - a read-session helper that always closes sessions
 - a parameterized database health check at `GET /api/health`
 
-Graph modeling, seed data, product queries, and the final interface are intentionally reserved for later phases.
+Phase 2 added the graph data model, realistic seed data, an idempotent seed script, and a foundational query layer:
+
+- typed node/relationship models in `src/lib/types/graph.ts`
+- realistic seed data in `data/seed-data.ts` (18 Developers, 35 Skills, 18 Projects, 12 Roles, 9 Companies)
+- an idempotent seed script (`npm run seed`) that creates constraints/indexes and MERGEs nodes and relationships
+- a parameterized query layer in `src/lib/queries/`, including a 2-hop traversal and a shortest-path career query
+- a thin service layer in `src/lib/services/` wrapping the query layer for future API routes
+
+Product queries wired into the UI, and the final interface, are reserved for later phases.
 
 ## Tech stack
 
