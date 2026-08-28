@@ -77,6 +77,15 @@ export async function getMatchingRolesForDeveloper(
   }));
 }
 
+/**
+ * Skills a role requires that the developer does not already have.
+ *
+ * Uses OPTIONAL MATCH + IS NULL (the same anti-join idiom as
+ * getMatchingRolesForDeveloper) rather than a `NOT (...)` pattern predicate:
+ * CognoDB evaluates pattern-existence predicates in a WHERE clause as false
+ * instead of matching them, which silently reported every required skill as
+ * missing.
+ */
 export async function getSkillGapForRole(
   session: Session,
   developerId: string,
@@ -84,7 +93,9 @@ export async function getSkillGapForRole(
 ): Promise<SkillGapEntry[]> {
   const result = await session.run(
     `MATCH (r:Role {id: $roleId})-[req:REQUIRES]->(s:Skill)
-     WHERE NOT (:Developer {id: $developerId})-[:HAS_SKILL]->(s)
+     OPTIONAL MATCH (d:Developer {id: $developerId})-[:HAS_SKILL]->(s)
+     WITH s, req, d
+     WHERE d IS NULL
      RETURN s.id AS id, s.name AS name, s.category AS category,
             req.minimumLevel AS minimumLevel, req.importance AS importance
      ORDER BY req.importance, s.name`,
