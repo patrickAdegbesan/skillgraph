@@ -6,48 +6,31 @@ SkillGraph is a graph-powered career and skill path explorer. It will help peopl
 
 This is a take-home assessment (Full Stack Developer Intern — CognoDB, Wexa AI) built around a real product idea: a developer should be able to see, at a glance, how their existing skills and project work connect to the roles and companies they might target next, and what the shortest realistic path is to close the gap. The demo persona is Patrick Adegbesan (`dev-patrick-adegbesan`), a full stack developer whose direct skills, project history, and best-matching role (Full Stack Developer, 80%) drive every screen in the app.
 
-## Current development status
+## Features
 
-Phase 1 (foundation), Phase 2 (graph model, seed data, seed script, query layer), Phase 3 (API layer), and Phase 4 (career-explorer frontend) are complete and merged. Phase 5 completed **live validation against the hosted CognoDB instance** and **deployed the application publicly**: health check, seed (run twice, idempotent), every API route, and a real-browser click-through of every page all pass against the real instance, both locally and on the deployed demo at [https://skillgraph.mr-path.site](https://skillgraph.mr-path.site). See the Assignment Notes / Verification section near the end of this README for the full record.
+- **Skill evidence, two ways.** Skills a developer has declared are kept distinct from skills only evidenced by the projects they actually built. Project evidence is never silently promoted into a declared skill — it is exposure, not a proficiency claim.
+- **Role matching.** Every role is scored by how many of its required skills the developer already has, ranked best-match first, with match percentage, matched skills, and the remaining gap.
+- **Skill gap analysis.** For any role: what is matched, what is missing, each requirement's minimum level and importance, and which companies offer that role.
+- **Career paths.** A bounded traversal across related skills from what the developer knows toward what a target role requires, presented as a possible learning connection rather than a guarantee.
+- **Graceful degradation.** Loading skeletons, empty states distinct from errors, sanitized database-failure messages, and a health endpoint.
 
-New contributors and AI coding agents should read [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) first. It documents the assessment requirements, the graph model, the phase plan, the secrets policy, and the rules for continuing this project.
+The demo runs with no login, defaulting to the persona `dev-patrick-adegbesan`.
 
-Phase 1 established the application foundation:
+## How It's Built
 
-- Next.js App Router with TypeScript
-- Tailwind CSS and ESLint
-- validated server-side CognoDB configuration
-- lazy Neo4j driver initialization for CognoDB over Bolt
-- a read-session helper that always closes sessions
-- a parameterized database health check at `GET /api/health`
+Layering is strict — `UI -> API route -> service -> query layer -> CognoDB` — and Cypher never appears outside the query layer or inside a React component.
 
-Phase 2 added the graph data model, realistic seed data, an idempotent seed script, and a foundational query layer:
+| Layer | Location | Responsibility |
+| --- | --- | --- |
+| UI | `src/app/`, `src/components/` | Pages and presentational components. A single `useApiResource` hook is the only place the frontend calls `fetch`. |
+| API | `src/app/api/developers/` | Seven routes sharing a `{ data }` / `{ error }` envelope, with Zod-validated route parameters and sanitized errors. |
+| Service | `src/lib/services/` | Composes focused queries into view-shaped results; derives match percentages and skill gaps. |
+| Query | `src/lib/queries/` | Parameterized Cypher only. Each function takes a `Session` and returns typed rows. |
+| Data access | `src/lib/db/` | Lazy Neo4j driver for CognoDB over Bolt, plus read/write session helpers that always close in a `finally`. |
 
-- typed node/relationship models in `src/lib/types/graph.ts`
-- realistic seed data in `data/seed-data.ts` (18 Developers, 35 Skills, 18 Projects, 12 Roles, 9 Companies)
-- an idempotent seed script (`npm run seed`) that creates constraints/indexes and MERGEs nodes and relationships
-- a parameterized query layer in `src/lib/queries/`, including a 2-hop traversal and a shortest-path career query
-- a thin service layer in `src/lib/services/` wrapping the query layer for future API routes
+Supporting pieces: typed graph models in `src/lib/types/graph.ts`, seed data in `data/seed-data.ts` (18 Developers, 35 Skills, 18 Projects, 12 Roles, 9 Companies), and an idempotent seed script (`npm run seed`) that creates constraints then `MERGE`s nodes and relationships, so re-running it never duplicates or wipes data.
 
-Phase 3 exposed the graph functionality through a server/API layer, keeping the architecture `UI -> API/server -> service layer -> query layer -> CognoDB` and Cypher confined entirely to the query layer:
-
-- foundational lookups added to the query layer: `getDeveloperById`, `getDeveloperProjects`, `getRoleById`, `getRoleRequirements`
-- role matching upgraded to a product-friendly result (match percentage, matched skills, missing skill count)
-- project-derived skill evidence (`directSkills` / `projectDerivedSkills` / `projectDerivedOnlySkills`) exposed as its own result
-- a composed role-detail-for-developer service result (requirements, matches, gaps, companies, career path) built by calling several focused queries rather than one large one
-- the career-path traversal wrapped into an application-friendly shape (`startingSkill`, `targetSkill`, `steps`, `hopCount`)
-- seven Next.js API routes under `src/app/api/developers/`, using a shared `{ data }` / `{ error }` response shape, Zod-validated route parameters, and sanitized error handling
-
-Phase 4 built the user-facing career explorer on top of that API, defaulting to the demo persona Patrick Adegbesan (`dev-patrick-adegbesan`) with no login required:
-
-- an application shell (`src/components/AppShell.tsx`) with SkillGraph branding, a responsive top nav (Overview, Skills, Roles, Career Path), and a mobile menu
-- an Overview page summarizing the developer's profile, key metrics, and best role match
-- a Skills page distinguishing direct (declared) skills from skills only evidenced through project work
-- a Roles page and per-role detail page built on the role-matching and role-detail API responses
-- a Career Path page visualizing the bounded skill-path traversal, with a role picker defaulting to the developer's best match
-- reusable UI primitives (`SkillBadge`, `RoleMatchCard`, `MatchProgress`, `SkillGapList`, `CompanyList`, `CareerPathVisualization`, `EmptyState`, `ErrorState`, loading skeletons) and a small `useApiResource` hook that fetches from the API routes and exposes loading/success/error state to each page
-
-See the Frontend section below for the full UI architecture, state handling, and career-path visualization details.
+Credentials are read only on the server, validated at startup, and never exposed to the browser.
 
 ## Why a Graph Database?
 
@@ -334,7 +317,7 @@ Every data-driven section has all three states, not just a happy path:
 
 ### Career path visualization
 
-`CareerPathVisualization` renders the bounded `RELATED_TO` traversal from Phase 3 as a small, focused step diagram — skill pill, arrow, skill pill, ... , arrow, into the target role — rather than a large interactive graph library. Each step fades/slides in with a short staggered animation (disabled under `prefers-reduced-motion`). The component is explicit that this is "a possible learning connection," never a guarantee, and the empty state explains that no short path existing yet doesn't mean the role is out of reach. The dedicated `/career-path` page adds a role picker (defaulting to the developer's best match) so a visitor can explore the path toward any role, not just the top one; the same component is reused inside each role's detail page for that specific role.
+`CareerPathVisualization` renders the bounded `RELATED_TO` traversal as a small, focused step diagram — skill pill, arrow, skill pill, ... , arrow, into the target role — rather than a large interactive graph library. Each step fades/slides in with a short staggered animation (disabled under `prefers-reduced-motion`). The component is explicit that this is "a possible learning connection," never a guarantee, and the empty state explains that no short path existing yet doesn't mean the role is out of reach. The dedicated `/career-path` page adds a role picker (defaulting to the developer's best match) so a visitor can explore the path toward any role, not just the top one; the same component is reused inside each role's detail page for that specific role.
 
 ## Screenshots
 
