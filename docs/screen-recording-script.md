@@ -2,8 +2,8 @@
 
 Target length: 2–4 minutes. Record against the deployed hosted demo once it
 exists (see the Live Demo section of the root README) — not a local instance.
-Nothing below needs narration about Claude, Cypher jargon, or this
-development process; keep the language aimed at a nontechnical evaluator.
+Keep the language aimed at a nontechnical evaluator — no Cypher jargon and
+no walkthrough of the build process.
 
 ## Beats
 
