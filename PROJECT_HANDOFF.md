@@ -514,12 +514,18 @@ npm audit          # 0 vulnerabilities
 The application is deployed publicly on **Google Cloud Run**:
 
 ```text
-https://skillgraph-217700153550.us-central1.run.app
+https://skillgraph.mr-path.site
 ```
 
 - Built from the repository `Dockerfile` via Cloud Build (Next.js
   `output: "standalone"`, Node 20, non-root user). Not a static export —
   every `/api` route runs server-side and opens a Bolt connection.
+- Served over a **mapped custom domain**. Ownership of `mr-path.site` was
+  verified via Google Search Console, then a Cloud Run domain mapping was
+  created for `skillgraph.mr-path.site`, requiring one `CNAME` to
+  `ghs.googlehosted.com.` at the registrar. Google issues and renews the TLS
+  certificate automatically. A subdomain was chosen deliberately so the apex
+  and `www` keep serving the existing site there untouched.
 - Deployed into a dedicated GCP project created for this assessment, kept
   separate from any other workload.
 - The three CognoDB values live in **Google Secret Manager** and are mounted
