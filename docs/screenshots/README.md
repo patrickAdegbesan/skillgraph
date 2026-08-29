@@ -1,7 +1,7 @@
 # Screenshots
 
 These are captured from the deployed demo
-(https://skillgraph-217700153550.us-central1.run.app), which runs against the
+(https://skillgraph.mr-path.site), which runs against the
 hosted CognoDB instance — not from a local stand-in database. Every number
 visible in them is the result of a live graph traversal.
 

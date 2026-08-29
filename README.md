@@ -8,7 +8,7 @@ This is a take-home assessment (Full Stack Developer Intern — CognoDB, Wexa AI
 
 ## Current development status
 
-Phase 1 (foundation), Phase 2 (graph model, seed data, seed script, query layer), Phase 3 (API layer), and Phase 4 (career-explorer frontend) are complete and merged. Phase 5 completed **live validation against the hosted CognoDB instance** and **deployed the application publicly**: health check, seed (run twice, idempotent), every API route, and a real-browser click-through of every page all pass against the real instance, both locally and on the deployed demo at [https://skillgraph-217700153550.us-central1.run.app](https://skillgraph-217700153550.us-central1.run.app). See the Assignment Notes / Verification section near the end of this README for the full record.
+Phase 1 (foundation), Phase 2 (graph model, seed data, seed script, query layer), Phase 3 (API layer), and Phase 4 (career-explorer frontend) are complete and merged. Phase 5 completed **live validation against the hosted CognoDB instance** and **deployed the application publicly**: health check, seed (run twice, idempotent), every API route, and a real-browser click-through of every page all pass against the real instance, both locally and on the deployed demo at [https://skillgraph.mr-path.site](https://skillgraph.mr-path.site). See the Assignment Notes / Verification section near the end of this README for the full record.
 
 New contributors and AI coding agents should read [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) first. It documents the assessment requirements, the graph model, the phase plan, the secrets policy, and the rules for continuing this project.
 
@@ -372,14 +372,14 @@ The bounded `RELATED_TO` traversal from a skill the developer already has toward
 
 ## Live Demo
 
-**https://skillgraph-217700153550.us-central1.run.app**
+**https://skillgraph.mr-path.site**
 
 Publicly reachable, no login required. The deployed service connects to the same hosted CognoDB instance described below — the numbers on screen are live graph traversals, not fixtures.
 
 Quick check:
 
 ```bash
-curl -s https://skillgraph-217700153550.us-central1.run.app/api/health
+curl -s https://skillgraph.mr-path.site/api/health
 # {"status":"ok","database":"reachable"}
 ```
 
@@ -464,6 +464,29 @@ The service scales to zero when idle. Any host that runs a Node.js server and
 allows outbound Bolt connections works equally well — nothing in the app is
 tied to Cloud Run.
 
+### Custom domain
+
+The demo is served from `skillgraph.mr-path.site`, mapped to the Cloud Run
+service. Ownership of `mr-path.site` was verified through Google Search
+Console (a TXT record at the registrar), then:
+
+```bash
+gcloud beta run domain-mappings create \
+  --service=skillgraph \
+  --domain=skillgraph.mr-path.site \
+  --region=us-central1
+```
+
+That mapping asks for a single DNS record at the registrar:
+
+```text
+CNAME  skillgraph  ghs.googlehosted.com.
+```
+
+Google then issues and renews a managed TLS certificate automatically. A
+subdomain was chosen deliberately so the apex `mr-path.site` and its `www`
+record keep serving their existing site untouched.
+
 ## Architecture
 
 ```
@@ -534,7 +557,7 @@ npm audit          # 0 vulnerabilities
 
 **Local integration verification (done earlier):** the seed script, every Cypher query, and the full UI were also exercised against a temporary, disposable Neo4j 5.26 instance across Phases 2–4, covering every API route's success/empty/404/503 responses (including the `503` database-down path, which is not safe to test against the hosted instance) and a real-browser desktop + mobile click-through of every page.
 
-**Deployment (done):** the application is deployed publicly on **Google Cloud Run** at [https://skillgraph-217700153550.us-central1.run.app](https://skillgraph-217700153550.us-central1.run.app), built from the [`Dockerfile`](Dockerfile) in this repository via Cloud Build. Verified on the deployed service, not just locally:
+**Deployment (done):** the application is deployed publicly on **Google Cloud Run** at [https://skillgraph.mr-path.site](https://skillgraph.mr-path.site), built from the [`Dockerfile`](Dockerfile) in this repository via Cloud Build and served over a mapped custom domain with a Google-managed TLS certificate. Verified on the deployed service, not just locally:
 
 - `GET /api/health` returns `{"status":"ok","database":"reachable"}` (HTTP 200), confirming the deployed container reaches the hosted CognoDB instance over Bolt.
 - The API returns correct live data in production: `projectDerivedOnlySkills` is Neo4j, Node.js and Tailwind CSS; the top role is Full Stack Developer at 80% (4 of 5) with Node.js the missing skill; the career-path route returns the 1-hop JavaScript → TypeScript path.
